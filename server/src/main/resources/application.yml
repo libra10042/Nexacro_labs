@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 200MB
+      file-size-threshold: 2KB
+  datasource:
+    url: jdbc:h2:mem:fileupload;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+app:
+  upload:
+    # webroot 밖의 비공개 디렉토리에 저장
+    storage-dir: ${UPLOAD_STORAGE_DIR:./upload-storage}
+    max-file-size-bytes: 52428800 # 50MB, spring.servlet.multipart.max-file-size 와 동일하게 유지
+    allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip
+    blocked-extensions: jsp,jspx,php,php3,php4,php5,phtml,asp,aspx,exe,sh,bat,cmd,cgi,pl,py,js,html,htm,svg
