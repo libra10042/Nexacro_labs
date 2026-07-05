@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE Root[
+<!ATTLIST Root xmlns CDATA #FIXED "http://www.nexacroplatform.com/platform/form">
+]>
+<Root>
+    <TypeDefinition></TypeDefinition>
+    <Form id="Form" style="tabindex:0;" titletext="Excel Upload Sample" left="0" top="0" width="820" height="480" background="#ffffffff">
+        <DataSet id="ds_list" localechangeapply="false" caseSensitive="false">
+            <ColumnInfo>
+                <Column id="col_name" type="STRING" size="256"/>
+                <Column id="col_age" type="STRING" size="256"/>
+                <Column id="col_dept" type="STRING" size="256"/>
+            </ColumnInfo>
+            <Rows/>
+        </DataSet>
+        <Objects>
+            <Static id="stc_title" left="20" top="15" width="400" height="24" text="엑셀 업로드 예제" cssclass="stc_WhiteBoldUnderline"/>
+
+            <Edit id="edt_filepath" left="20" top="50" width="500" height="26" tabindex="0" edittype="normal" readonly="true"
+                  cssclass="edt_Nexacro_ReadOnly" taborder="0"/>
+
+            <Button id="btn_find" left="530" top="50" width="110" height="26" text="파일찾기" taborder="1"/>
+
+            <Button id="btn_upload" left="650" top="50" width="110" height="26" text="업로드" taborder="2"/>
+
+            <Grid id="grd_list" left="20" top="90" width="740" height="360" tabindex="3"
+                  cellstyle="line-height:22;background:#ffffffff;color:#ff000000;vAlign:middle;">
+                <Bindings>
+                    <Column BindID="ds_list" BindItem="col_name"/>
+                    <Column BindID="ds_list" BindItem="col_age"/>
+                    <Column BindID="ds_list" BindItem="col_dept"/>
+                </Bindings>
+                <Formats>
+                    <Format id="default">
+                        <Columns>
+                            <Column size="300"/>
+                            <Column size="140"/>
+                            <Column size="300"/>
+                        </Columns>
+                        <Rows>
+                            <Row Type="Head" size="24">
+                                <Cell col="0" text="이름"/>
+                                <Cell col="1" text="나이"/>
+                                <Cell col="2" text="부서"/>
+                            </Row>
+                            <Row Band="Body">
+                                <Cell col="0" displaytype="text" celltype="text" editable="false"/>
+                                <Cell col="1" displaytype="text" celltype="text" editable="false"/>
+                                <Cell col="2" displaytype="text" celltype="text" editable="false"/>
+                            </Row>
+                        </Rows>
+                    </Format>
+                </Formats>
+            </Grid>
+        </Objects>
+        <Script><![CDATA[
+/*
+    엑셀 업로드 예제
+    - 흐름: 파일찾기(로컬 파일 선택) -> 업로드(멀티파트 트랜잭션) -> 서버에서 Apache POI로 파싱
+            -> Nexacro Platform XML(Dataset) 형태로 응답 -> ds_list 에 바인딩되어 Grid 표시
+
+    주의:
+    - showOpenDialog / this.transaction 의 파라미터 순서/옵션은 Nexacro 버전(14 / 17 / N)에
+      따라 세부 옵션이 조금씩 다를 수 있습니다. 실제 프로젝트에 적용하기 전에
+      사용 중인 Nexacro Studio의 API 도움말로 시그니처를 한번 확인하세요.
+*/
+
+this.Form_onload = function(obj:Form, e:nexacro.LoadEventInfo)
+{
+    // 서버 주소는 환경에 맞게 수정
+    this.gv_uploadUrl = "http://localhost:8080/api/excel/upload";
+};
+
+// [파일찾기] 클릭 -> 로컬 파일 선택 다이얼로그
+this.btn_find_onclick = function(obj:nexacro.Button, e:nexacro.ClickEventInfo)
+{
+    var sFilter = "Excel 파일(*.xls;*.xlsx)|*.xls;*.xlsx|모든 파일(*.*)|*.*";
+    // showOpenDialog(callbackObj, title, initpath, filter, initfilename, filterindex, option)
+    this.showOpenDialog(this, "엑셀 파일 선택", "", sFilter, "", 0, 0);
+};
+
+// showOpenDialog 콜백: 사용자가 파일을 선택하면 호출됨
+this.form_callback = function(strAbsolutePath:String, strFilePath:String, strFileName:String, strFileExt:String)
+{
+    if (strAbsolutePath == "")
+    {
+        return;
+    }
+
+    if (strFileExt.toLowerCase() != "xls" && strFileExt.toLowerCase() != "xlsx")
+    {
+        this.gfn_getApplication().alert("xls, xlsx 파일만 업로드할 수 있습니다.");
+        return;
+    }
+
+    this.edt_filepath.set_value(strAbsolutePath);
+};
+
+// [업로드] 클릭 -> 선택한 엑셀 파일을 서버로 전송 (멀티파트)
+this.btn_upload_onclick = function(obj:nexacro.Button, e:nexacro.ClickEventInfo)
+{
+    var sFilePath = this.edt_filepath.value;
+
+    if (sFilePath == "" || sFilePath == undefined)
+    {
+        this.gfn_getApplication().alert("업로드할 엑셀 파일을 먼저 선택하세요.");
+        return;
+    }
+
+    // 업로드에 사용할 파라미터 등록: id="uploadfile" 은 서버 컨트롤러의
+    // @RequestParam("uploadfile") 과 이름이 일치해야 함
+    this.trans_upload.addParameter("uploadfile", sFilePath, "FILE");
+
+    // this.transaction(서비스명, url, "요청datasetlist", "응답datasetlist", argument, callback, sync여부)
+    // ":multipart" 접미사는 첨부파일과 함께 multipart/form-data 로 전송하라는 의미
+    this.transaction("upload", this.gv_uploadUrl, "trans_upload=ds_list:multipart", "ds_list=output", "", this.fn_uploadCallback, true);
+};
+
+// 업로드 트랜잭션 콜백
+this.fn_uploadCallback = function(strTrxName:String, nErrorCode:Number, strErrorMsg:String)
+{
+    if (nErrorCode < 0)
+    {
+        this.gfn_getApplication().alert("업로드 실패: " + strErrorMsg);
+        return;
+    }
+
+    this.gfn_getApplication().alert("업로드 성공. 총 " + this.ds_list.rowcount + "건이 조회되었습니다.");
+};
+        ]]></Script>
+    </Form>
+</Root>
