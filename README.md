@@ -17,11 +17,24 @@ server/                           # Spring Boot 백엔드
 2. `[업로드]` 클릭 → `trans_upload.addParameter("uploadfile", path, "FILE")` 로 파일을 등록하고
    `this.transaction(..., "trans_upload=ds_list:multipart", "ds_list=output", ...)` 로 멀티파트 전송
 3. 서버 `POST /api/excel/upload` 가 `MultipartFile` 로 파일을 받아 Apache POI로 파싱
-4. 파싱 결과를 `Root/Dataset/Rows` 형태의 XML 문자열로 만들어 응답 (`NexacroPlatformXmlBuilder`)
-5. Nexacro가 응답을 `ds_list`에 채우고, `Grid`가 이를 바인딩해 화면에 표시
+4. 파싱된 각 행을 `ExcelUploadRow` 엔티티로 변환해 DB(H2)에 저장 (`ExcelUploadService#parseExcelAndSave`)
+5. 저장한 내용을 `Root/Dataset/Rows` 형태의 XML 문자열로 만들어 응답 (`NexacroPlatformXmlBuilder`)
+6. Nexacro가 응답을 `ds_list`에 채우고, `Grid`가 이를 바인딩해 화면에 표시
+7. `GET /api/excel/list` 로 DB에 저장된 전체 데이터를 같은 XML 포맷으로 다시 조회 가능 (재조회/새로고침용)
 
 엑셀 시트 구조는 1행 헤더 + 2행부터 데이터, A열=이름 / B열=나이 / C열=부서로 가정했습니다.
-(`ExcelUploadService`, `.xfdl`의 `ds_list` 컬럼 정의에서 자유롭게 확장 가능)
+(`ExcelUploadService`, `ExcelUploadRow`, `.xfdl`의 `ds_list` 컬럼 정의에서 자유롭게 확장 가능)
+
+## DB 저장
+
+- 기본값은 파일 기반 H2(`server/data/excelupload.mv.db`, 최초 실행 시 자동 생성)이며, 저장 데이터는
+  `excel_upload_row` 테이블(`id`, `name`, `age`, `dept`, `uploaded_at`)에 쌓입니다.
+- `ddl-auto: update` 로 테이블을 자동 생성하므로 별도 스키마 작업 없이 바로 실행 가능합니다.
+- `http://localhost:8080/h2-console` 에서 JDBC URL `jdbc:h2:file:./data/excelupload` 로 접속하면
+  저장된 데이터를 직접 확인할 수 있습니다.
+- MySQL/PostgreSQL 등 실제 운영 DB로 바꾸려면 `application.yml`의 `spring.datasource.*` 값과
+  `pom.xml`의 DB 드라이버 의존성만 교체하면 되고, `ExcelUploadRowRepository`/`ExcelUploadRow`는
+  그대로 재사용됩니다.
 
 ## 서버 실행
 
